@@ -12,7 +12,6 @@
       background: #f7f7f7;
       font-size: clamp(14px, 3.5vw, 18px);
       margin: 0;
-      padding: 0;
     }
     * {
       box-sizing: border-box;
@@ -23,7 +22,7 @@
       border-radius: 20px;
       max-width: 480px;
       width: 100%;
-      margin: clamp(20px, 5vw, 50px) auto;
+      margin: clamp(30px, 8vw, 80px) auto;
       box-shadow: 0 4px 12px rgba(0,0,0,0.08);
     }
     h2 {
@@ -51,14 +50,17 @@
       background: #4f46e5;
       color: white;
       cursor: pointer;
+      transition: 0.15s;
     }
     button:active {
       background: #4338ca;
+      transform: scale(0.98);
     }
     .done {
       margin-top: 15px;
-      color: green;
+      color: #16a34a;
       display: none;
+      font-weight: 600;
     }
     .info {
       font-size: clamp(12px, 3vw, 14px);
