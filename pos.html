@@ -134,125 +134,148 @@
     
     <button class="save-btn" onclick="saveToSheet()">데이터 저장 및 완료</button>
 </div>
-
 <script>
-    // 1. 상품 데이터 (초기 재고 stock 추가)
+    // 1. 상품 데이터
     const products = [
-        { name: "러기지택+스티커", price: 15000, stock: 67 },
+        { name: "러기지택+스티커", price: 15000, stock: 100 },
         { name: "마그넷", price: 5000, stock: 100 },
         { name: "파우치", price: 8000, stock: 100 },
         { name: "티코스터", price: 8000, stock: 100 },
-        { name: "접는 부채", price: 20000, stock: 10 },
-        { name: "일반 부채", price: 7000, stock: 20 },
-        { name: "키링", price: 3000, stock: 20 }
+        { name: "접는 부채", price: 20000, stock: 100 },
+        { name: "일반 부채", price: 7000, stock: 100 },
+        { name: "키링", price: 3000, stock: 100 }
     ];
 
     let cart = {};
 
-    function init() {
-        const grid = document.getElementById('product-grid');
-        grid.innerHTML = '';
-        products.forEach((p, index) => {
-            const btn = document.createElement('div');
-            btn.id = `prod-${index}`;
-            btn.className = 'p-btn';
-            updateButtonStatus(btn, p); // 초기 상태 설정
-            
-            btn.innerHTML = `<h3>${p.name}</h3><p>${p.price.toLocaleString()}원</p>`;
-            btn.onclick = () => {
-                if(p.stock > 0) addToCart(p, index);
-            };
-            grid.appendChild(btn);
-        });
+    // [중요] 화면 업데이트 함수를 위쪽으로 올렸습니다.
+    function renderCart() {
+        const list = document.getElementById('cart-list');
+        const totalDisp = document.getElementById('total-amount');
+        if (!list || !totalDisp) return;
 
-        // 엔터키 누르면 저장 실행
-        document.getElementById('cust-name').addEventListener('keypress', function(e) {
-            if (e.key === 'Enter') saveToSheet();
-        });
+        list.innerHTML = '';
+        let total = 0;
+
+        for (let name in cart) {
+            const item = cart[name];
+            total += item.price * item.qty;
+            list.innerHTML += `
+                <div class="cart-item">
+                    <div class="item-info">
+                        <div class="item-name">${name} x ${item.qty}</div>
+                        <div class="item-price">${(item.price * item.qty).toLocaleString()}원</div>
+                    </div>
+                    <button class="remove-btn" onclick="removeFromCart('${name}')">−</button>
+                </div>`;
+        }
+        totalDisp.innerText = total.toLocaleString() + "원";
     }
 
-    // 재고에 따른 버튼 색상 업데이트
     function updateButtonStatus(btn, product) {
+        if (!btn) return;
         if (product.stock <= 0) {
-            btn.style.backgroundColor = '#d1d1d1'; // 품절: 회색
+            btn.style.backgroundColor = '#e9ecef';
             btn.style.opacity = '0.6';
             btn.style.cursor = 'not-allowed';
         } else if (product.stock <= 10) {
-            btn.style.backgroundColor = '#fff9db'; // 주의: 연노랑
+            btn.style.backgroundColor = '#fff9db';
             btn.style.borderColor = '#fab005';
         } else {
-            btn.style.backgroundColor = '#ffffff'; // 정상: 흰색
+            btn.style.backgroundColor = '#ffffff';
+            btn.style.borderColor = 'rgba(0,0,0,0.05)';
         }
     }
 
     function addToCart(product, index) {
         if (product.stock > 0) {
-            if(cart[product.name]) cart[product.name].qty++;
-            else cart[product.name] = { price: product.price, qty: 1, index: index };
-            
-            product.stock--; // 로컬 재고 차감
+            if (cart[product.name]) {
+                cart[product.name].qty++;
+            } else {
+                cart[product.name] = { price: product.price, qty: 1, index: index };
+            }
+            product.stock--; 
             updateButtonStatus(document.getElementById(`prod-${index}`), product);
-            renderCart();
+            renderCart(); // 이제 renderCart를 정상적으로 호출할 수 있습니다.
         }
     }
 
     function removeFromCart(name) {
-        if(cart[name]) {
+        if (cart[name]) {
             const prodIndex = cart[name].index;
-            products[prodIndex].stock++; // 재고 복구
+            products[prodIndex].stock++;
             updateButtonStatus(document.getElementById(`prod-${prodIndex}`), products[prodIndex]);
             
             cart[name].qty--;
-            if(cart[name].qty <= 0) delete cart[name];
+            if (cart[name].qty <= 0) delete cart[name];
         }
         renderCart();
     }
 
     async function saveToSheet() {
         const nameInput = document.getElementById('cust-name');
-        const name = nameInput.value || "익명";
+        const name = nameInput ? nameInput.value || "익명" : "익명";
         const saveBtn = document.querySelector('.save-btn');
 
         if (Object.keys(cart).length === 0) return;
 
-        // 버튼 비활성화 및 전송 시작
         saveBtn.disabled = true;
         saveBtn.innerText = "저장 중...";
 
         const summary = Object.keys(cart).map(k => `${k}(${cart[k].qty})`).join(', ');
         const totalAmount = Object.values(cart).reduce((s, i) => s + (i.price * i.qty), 0);
 
-        const orderData = {
-            customerName: name,
-            orderSummary: summary,
-            totalAmount: totalAmount,
-            payMethod: "계좌이체"
-        };
-
         try {
-            // fetch 시도 (응답 기다리지 않는 no-cors 방식)
-            fetch('https://script.google.com/macros/s/AKfycbxBrYh4FvlTlvVO8V9VGH3v3_WLN8iQrHEMIfE2buj6880FW9dF0quC8gdR-P70ydfb/exec', {
+            await fetch('https://script.google.com/macros/s/AKfycbxBrYh4FvlTlvVO8V9VGH3v3_WLN8iQrHEMIfE2buj6880FW9dF0quC8gdR-P70ydfb/exec', {
                 method: 'POST',
                 mode: 'no-cors',
-                body: JSON.stringify(orderData)
+                body: JSON.stringify({
+                    customerName: name,
+                    orderSummary: summary,
+                    totalAmount: totalAmount,
+                    payMethod: "계좌이체"
+                })
             });
 
-            // 즉시 UI 피드백 (대기 시간 최소화)
             alert(`${name}님 저장 완료!`);
             cart = {};
-            nameInput.value = '';
+            if (nameInput) nameInput.value = '';
             renderCart();
         } catch (error) {
-            // 실패 시 로컬 로그 남기기 (F12 콘솔에서 확인 가능)
-            console.error("전송 실패 데이터:", orderData);
-            alert("연결 불안정! 콘솔 로그를 확인하세요.");
+            console.error("전송 에러:", error);
+            alert("저장 실패! 네트워크를 확인하세요.");
         } finally {
             saveBtn.disabled = false;
             saveBtn.innerText = "데이터 저장 및 완료";
         }
     }
 
-    init();
+    function init() {
+        const grid = document.getElementById('product-grid');
+        if (!grid) return;
+        
+        grid.innerHTML = '';
+        products.forEach((p, index) => {
+            const btn = document.createElement('div');
+            btn.id = `prod-${index}`;
+            btn.className = 'p-btn';
+            btn.innerHTML = `<h3>${p.name}</h3><p>${p.price.toLocaleString()}원</p>`;
+            updateButtonStatus(btn, p);
+            btn.onclick = () => addToCart(p, index);
+            grid.appendChild(btn);
+        });
+
+        const nameInput = document.getElementById('cust-name');
+        if (nameInput) {
+            nameInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') saveToSheet();
+            });
+        }
+    }
+
+    // 모든 준비가 끝나면 실행
+    window.onload = init;
 </script>
+
 </body>
 </html>
