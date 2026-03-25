@@ -146,13 +146,14 @@
         { name: "키링", price: 3000, stock: 20 }
     ];
 
-    let cart = {};
+   let cart = {};
+    const GAS_URL = '여기에_새로_배포한_웹앱_URL을_넣으세요';
 
-    // [중요] 화면 업데이트 함수를 위쪽으로 올렸습니다.
+    // 장바구니 화면 업데이트
     function renderCart() {
         const list = document.getElementById('cart-list');
         const totalDisp = document.getElementById('total-amount');
-        if (!list || !totalDisp) return;
+        if (!list) return;
 
         list.innerHTML = '';
         let total = 0;
@@ -172,39 +173,38 @@
         totalDisp.innerText = total.toLocaleString() + "원";
     }
 
+    // 버튼 색상 업데이트 (재고 시각화)
     function updateButtonStatus(btn, product) {
         if (!btn) return;
         if (product.stock <= 0) {
             btn.style.backgroundColor = '#e9ecef';
-            btn.style.opacity = '0.6';
+            btn.style.opacity = '0.5';
             btn.style.cursor = 'not-allowed';
         } else if (product.stock <= 10) {
-            btn.style.backgroundColor = '#fff9db';
+            btn.style.backgroundColor = '#fff9db'; // 재고 부족: 노랑
             btn.style.borderColor = '#fab005';
         } else {
             btn.style.backgroundColor = '#ffffff';
-            btn.style.borderColor = 'rgba(0,0,0,0.05)';
+            btn.style.borderColor = 'rgba(0,0,0,0.1)';
         }
     }
 
     function addToCart(product, index) {
         if (product.stock > 0) {
-            if (cart[product.name]) {
-                cart[product.name].qty++;
-            } else {
-                cart[product.name] = { price: product.price, qty: 1, index: index };
-            }
+            if (cart[product.name]) cart[product.name].qty++;
+            else cart[product.name] = { price: product.price, qty: 1, index: index };
+            
             product.stock--; 
             updateButtonStatus(document.getElementById(`prod-${index}`), product);
-            renderCart(); // 이제 renderCart를 정상적으로 호출할 수 있습니다.
+            renderCart();
         }
     }
 
     function removeFromCart(name) {
         if (cart[name]) {
-            const prodIndex = cart[name].index;
-            products[prodIndex].stock++;
-            updateButtonStatus(document.getElementById(`prod-${prodIndex}`), products[prodIndex]);
+            const idx = cart[name].index;
+            products[idx].stock++;
+            updateButtonStatus(document.getElementById(`prod-${idx}`), products[idx]);
             
             cart[name].qty--;
             if (cart[name].qty <= 0) delete cart[name];
@@ -212,38 +212,52 @@
         renderCart();
     }
 
+    // 최종 저장 함수 (행 분리 전송)
     async function saveToSheet() {
         const nameInput = document.getElementById('cust-name');
-        const name = nameInput ? nameInput.value || "익명" : "익명";
+        const name = nameInput.value.trim() || "익명";
         const saveBtn = document.querySelector('.save-btn');
 
         if (Object.keys(cart).length === 0) return;
 
-        saveBtn.disabled = true;
-        saveBtn.innerText = "저장 중...";
+        // 주문번호 생성 (YYYYMMDD-HHMMSS)
+        const now = new Date();
+        const orderId = now.getFullYear() + 
+            String(now.getMonth() + 1).padStart(2, '0') + 
+            String(now.getDate()).padStart(2, '0') + "-" +
+            String(now.getHours()).padStart(2, '0') + 
+            String(now.getMinutes()).padStart(2, '0') + 
+            String(now.getSeconds()).padStart(2, '0');
 
-        const summary = Object.keys(cart).map(k => `${k}(${cart[k].qty})`).join(', ');
-        const totalAmount = Object.values(cart).reduce((s, i) => s + (i.price * i.qty), 0);
+        saveBtn.disabled = true;
+        saveBtn.innerText = "전송 중...";
 
         try {
-            await fetch('https://script.google.com/macros/s/AKfycbxBrYh4FvlTlvVO8V9VGH3v3_WLN8iQrHEMIfE2buj6880FW9dF0quC8gdR-P70ydfb/exec', {
-                method: 'POST',
-                mode: 'no-cors',
-                body: JSON.stringify({
-                    customerName: name,
-                    orderSummary: summary,
-                    totalAmount: totalAmount,
-                    payMethod: "계좌이체"
-                })
-            });
+            // 장바구니의 품목별로 하나씩 전송 (재고 파악 용이)
+            for (let itemName in cart) {
+                const item = cart[itemName];
+                await fetch(GAS_URL, {
+                    method: 'POST',
+                    mode: 'no-cors',
+                    body: JSON.stringify({
+                        orderId: orderId,
+                        customerName: name,
+                        itemName: itemName,
+                        quantity: item.qty,
+                        price: item.price,
+                        total: item.price * item.qty
+                    })
+                });
+            }
 
-            alert(`${name}님 저장 완료!`);
+            alert(`[주문번호: ${orderId}]\n${name}님 저장 완료!`);
             cart = {};
-            if (nameInput) nameInput.value = '';
+            nameInput.value = '';
             renderCart();
-        } catch (error) {
-            console.error("전송 에러:", error);
-            alert("저장 실패! 네트워크를 확인하세요.");
+
+        } catch (e) {
+            console.error("비상! 전송 실패 데이터:", cart);
+            alert("인터넷 연결을 확인하세요! (F12 콘솔에 로그가 남았습니다)");
         } finally {
             saveBtn.disabled = false;
             saveBtn.innerText = "데이터 저장 및 완료";
@@ -252,28 +266,22 @@
 
     function init() {
         const grid = document.getElementById('product-grid');
-        if (!grid) return;
-        
         grid.innerHTML = '';
-        products.forEach((p, index) => {
+        products.forEach((p, i) => {
             const btn = document.createElement('div');
-            btn.id = `prod-${index}`;
+            btn.id = `prod-${i}`;
             btn.className = 'p-btn';
             btn.innerHTML = `<h3>${p.name}</h3><p>${p.price.toLocaleString()}원</p>`;
             updateButtonStatus(btn, p);
-            btn.onclick = () => addToCart(p, index);
+            btn.onclick = () => addToCart(p, i);
             grid.appendChild(btn);
         });
 
-        const nameInput = document.getElementById('cust-name');
-        if (nameInput) {
-            nameInput.addEventListener('keypress', (e) => {
-                if (e.key === 'Enter') saveToSheet();
-            });
-        }
+        document.getElementById('cust-name').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') saveToSheet();
+        });
     }
 
-    // 모든 준비가 끝나면 실행
     window.onload = init;
 </script>
 
