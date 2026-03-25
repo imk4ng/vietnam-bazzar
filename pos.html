@@ -314,6 +314,10 @@
     }
 
     window.onload = init;
+    // 스크립트 하단에 추가
+    window.onbeforeunload = function() {
+        return "페이지를 새로고침하면 현재 화면의 재고 수치가 초기화됩니다. 계속하시겠습니까?";
+    };
 </script>
 
 </body>
