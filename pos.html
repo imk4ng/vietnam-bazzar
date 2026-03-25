@@ -111,6 +111,27 @@
         }
         .save-btn { background: #1e272e; color: white; border: none; padding: 22px; border-radius: 16px; font-size: 1.3rem; font-weight: 700; cursor: pointer; transition: 0.2s; }
         .save-btn:hover { background: #000; box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        /* 로딩 스피너 애니메이션 */
+        .spinner {
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: #fff;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* 버튼 비활성화 시 커서 모양 변경 */
+        .save-btn:disabled {
+            cursor: not-allowed;
+        }
     </style>
 </head>
 <body>
@@ -246,7 +267,7 @@
         renderCart();
     }
 
-    // 최종 저장 함수 (행 분리 전송)
+        // 최종 저장 함수 (행 분리 전송)
     async function saveToSheet() {
         const nameInput = document.getElementById('cust-name');
         const name = nameInput.value.trim() || "익명";
@@ -254,20 +275,22 @@
 
         if (Object.keys(cart).length === 0) return;
 
-        // 주문번호 생성 (YYYYMMDD-HHMMSS)
+        // [주문번호 생성]
         const now = new Date();
         const orderId = String(now.getHours()).padStart(2, '0') + 
-                    String(now.getMinutes()).padStart(2, '0') + "-" +
-                    String(now.getSeconds()).padStart(2, '0');
+                        String(now.getMinutes()).padStart(2, '0') + "-" +
+                        String(now.getSeconds()).padStart(2, '0');
 
+        // 1. 버튼 비활성화 및 로딩 표시 (버퍼링 효과)
         saveBtn.disabled = true;
-        saveBtn.innerText = "전송 중...";
+        saveBtn.innerHTML = '<span class="spinner"></span> 처리 중...'; 
+        saveBtn.style.backgroundColor = '#adb5bd'; // 회색으로 변경
 
         try {
-            // 장바구니의 품목별로 하나씩 전송 (재고 파악 용이)
-            for (let itemName in cart) {
+            // 2. 비동기 병렬 전송 시작 (Promise.all)
+            const sendPromises = Object.keys(cart).map(itemName => {
                 const item = cart[itemName];
-                await fetch(GAS_URL, {
+                return fetch(GAS_URL, {
                     method: 'POST',
                     mode: 'no-cors',
                     body: JSON.stringify({
@@ -279,19 +302,27 @@
                         total: item.price * item.qty
                     })
                 });
-            }
+            });
 
-            alert(`[주문번호: ${orderId}]\n${name}님 저장 완료!`);
+            // 모든 품목이 전송될 때까지 기다림 (병렬이라 훨씬 빠름)
+            await Promise.all(sendPromises);
+
+            // 3. 성공 시 피드백
+            alert(`[주문번호: ${orderId}] 저장 완료!`);
+        
+            // 초기화
             cart = {};
             nameInput.value = '';
             renderCart();
 
         } catch (e) {
-            console.error("비상! 전송 실패 데이터:", cart);
-            alert("인터넷 연결을 확인하세요! (F12 콘솔에 로그가 남았습니다)");
+            console.error("전송 에러:", e);
+            alert("일부 데이터 저장에 실패했습니다. 인터넷을 확인하세요.");
         } finally {
+            // 4. 버튼 원복
             saveBtn.disabled = false;
-            saveBtn.innerText = "데이터 저장 및 완료";
+            saveBtn.innerHTML = "데이터 저장 및 완료";
+            saveBtn.style.backgroundColor = ''; // 원래 색상으로(CSS 기준)
         }
     }
 
