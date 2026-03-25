@@ -136,125 +136,117 @@
 </div>
 
 <script>
-    // 1. 상품 리스트
+    // 1. 상품 데이터 (초기 재고 stock 추가)
     const products = [
-        { name: "러기지택+스티커", price: 15000 },
-        { name: "마그넷", price: 5000 },
-        { name: "파우치", price: 8000 },
-        { name: "티코스터", price: 8000 },
-        { name: "접는 부채", price: 20000 },
-        { name: "일반 부채", price: 7000 },
-        { name: "키링", price: 3000 }
+        { name: "러기지택+스티커", price: 15000, stock: 67 },
+        { name: "마그넷", price: 5000, stock: 100 },
+        { name: "파우치", price: 8000, stock: 100 },
+        { name: "티코스터", price: 8000, stock: 100 },
+        { name: "접는 부채", price: 20000, stock: 10 },
+        { name: "일반 부채", price: 7000, stock: 20 },
+        { name: "키링", price: 3000, stock: 20 }
     ];
 
-    let cart = {}; // 중복 선언 방지를 위해 하나만 유지
+    let cart = {};
 
-    // 2. 초기화: 상품 버튼 생성
     function init() {
         const grid = document.getElementById('product-grid');
-        grid.innerHTML = ''; // 중복 생성 방지
-        products.forEach(p => {
+        grid.innerHTML = '';
+        products.forEach((p, index) => {
             const btn = document.createElement('div');
+            btn.id = `prod-${index}`;
             btn.className = 'p-btn';
+            updateButtonStatus(btn, p); // 초기 상태 설정
+            
             btn.innerHTML = `<h3>${p.name}</h3><p>${p.price.toLocaleString()}원</p>`;
-            btn.onclick = () => addToCart(p.name, p.price);
+            btn.onclick = () => {
+                if(p.stock > 0) addToCart(p, index);
+            };
             grid.appendChild(btn);
+        });
+
+        // 엔터키 누르면 저장 실행
+        document.getElementById('cust-name').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') saveToSheet();
         });
     }
 
-    // 3. 장바구니 담기
-    function addToCart(name, price) {
-        if(cart[name]) {
-            cart[name].qty++;
+    // 재고에 따른 버튼 색상 업데이트
+    function updateButtonStatus(btn, product) {
+        if (product.stock <= 0) {
+            btn.style.backgroundColor = '#d1d1d1'; // 품절: 회색
+            btn.style.opacity = '0.6';
+            btn.style.cursor = 'not-allowed';
+        } else if (product.stock <= 10) {
+            btn.style.backgroundColor = '#fff9db'; // 주의: 연노랑
+            btn.style.borderColor = '#fab005';
         } else {
-            cart[name] = { price, qty: 1 };
+            btn.style.backgroundColor = '#ffffff'; // 정상: 흰색
         }
-        renderCart();
     }
 
-    // 4. 하나 빼기 기능
+    function addToCart(product, index) {
+        if (product.stock > 0) {
+            if(cart[product.name]) cart[product.name].qty++;
+            else cart[product.name] = { price: product.price, qty: 1, index: index };
+            
+            product.stock--; // 로컬 재고 차감
+            updateButtonStatus(document.getElementById(`prod-${index}`), product);
+            renderCart();
+        }
+    }
+
     function removeFromCart(name) {
         if(cart[name]) {
+            const prodIndex = cart[name].index;
+            products[prodIndex].stock++; // 재고 복구
+            updateButtonStatus(document.getElementById(`prod-${prodIndex}`), products[prodIndex]);
+            
             cart[name].qty--;
             if(cart[name].qty <= 0) delete cart[name];
         }
         renderCart();
     }
 
-    // 5. 전체 비우기
-    function clearCart() {
-        if(Object.keys(cart).length === 0) return;
-        if(confirm("모든 주문 내역을 초기화할까요?")) {
-            cart = {};
-            renderCart();
-        }
-    }
-
-    // 6. 화면 업데이트
-    function renderCart() {
-        const list = document.getElementById('cart-list');
-        const totalDisp = document.getElementById('total-amount');
-        list.innerHTML = '';
-        let total = 0;
-
-        for(let name in cart) {
-            const item = cart[name];
-            total += item.price * item.qty;
-            list.innerHTML += `
-                <div class="cart-item">
-                    <div class="item-info">
-                        <div class="item-name">${name} x ${item.qty}</div>
-                        <div class="item-price">${(item.price * item.qty).toLocaleString()}원</div>
-                    </div>
-                    <button class="remove-btn" onclick="removeFromCart('${name}')">−</button>
-                </div>`;
-        }
-        totalDisp.innerText = total.toLocaleString() + "원";
-    }
-
-    // 7. 구글 시트로 전송 및 저장 (통합된 함수)
     async function saveToSheet() {
         const nameInput = document.getElementById('cust-name');
         const name = nameInput.value || "익명";
-        const totalText = document.getElementById('total-amount').innerText;
+        const saveBtn = document.querySelector('.save-btn');
 
-        if(Object.keys(cart).length === 0) {
-            alert("담긴 상품이 없습니다!");
-            return;
-        }
+        if (Object.keys(cart).length === 0) return;
 
-        // 품목 요약 만들기 (예: 마그넷(2), 키링(1))
-        const summary = Object.keys(cart).map(key => `${key}(${cart[key].qty})`).join(', ');
-        const totalAmount = Object.values(cart).reduce((sum, item) => sum + (item.price * item.qty), 0);
+        // 버튼 비활성화 및 전송 시작
+        saveBtn.disabled = true;
+        saveBtn.innerText = "저장 중...";
+
+        const summary = Object.keys(cart).map(k => `${k}(${cart[k].qty})`).join(', ');
+        const totalAmount = Object.values(cart).reduce((s, i) => s + (i.price * i.qty), 0);
+
+        const orderData = {
+            customerName: name,
+            orderSummary: summary,
+            totalAmount: totalAmount,
+            payMethod: "계좌이체"
+        };
 
         try {
-            // 버튼 비활성화 (여러 번 클릭 방지)
-            const saveBtn = document.querySelector('.save-btn');
-            saveBtn.disabled = true;
-            saveBtn.innerText = "저장 중...";
-
-            await fetch('https://script.google.com/macros/s/AKfycbxBrYh4FvlTlvVO8V9VGH3v3_WLN8iQrHEMIfE2buj6880FW9dF0quC8gdR-P70ydfb/exec', {
+            // fetch 시도 (응답 기다리지 않는 no-cors 방식)
+            fetch('https://script.google.com/macros/s/AKfycbxBrYh4FvlTlvVO8V9VGH3v3_WLN8iQrHEMIfE2buj6880FW9dF0quC8gdR-P70ydfb/exec', {
                 method: 'POST',
-                mode: 'no-cors', // 구글 앱스 스크립트 특성상 no-cors가 안정적일 수 있음
-                body: JSON.stringify({
-                    customerName: name,
-                    orderSummary: summary,
-                    totalAmount: totalAmount,
-                    payMethod: "계좌이체"
-                })
+                mode: 'no-cors',
+                body: JSON.stringify(orderData)
             });
 
-            alert(`${name}님 ${totalText} 저장 완료! 손님께 QR을 보여주세요.`);
-            
-            // 초기화
+            // 즉시 UI 피드백 (대기 시간 최소화)
+            alert(`${name}님 저장 완료!`);
             cart = {};
             nameInput.value = '';
             renderCart();
         } catch (error) {
-            console.error('Error:', error);
-            alert("저장 중 오류가 발생했습니다. 인터넷 연결을 확인해주세요.");
+            // 실패 시 로컬 로그 남기기 (F12 콘솔에서 확인 가능)
+            console.error("전송 실패 데이터:", orderData);
+            alert("연결 불안정! 콘솔 로그를 확인하세요.");
         } finally {
-            const saveBtn = document.querySelector('.save-btn');
             saveBtn.disabled = false;
             saveBtn.innerText = "데이터 저장 및 완료";
         }
