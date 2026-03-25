@@ -256,12 +256,9 @@
 
         // 주문번호 생성 (YYYYMMDD-HHMMSS)
         const now = new Date();
-        const orderId = now.getFullYear() + 
-            String(now.getMonth() + 1).padStart(2, '0') + 
-            String(now.getDate()).padStart(2, '0') + "-" +
-            String(now.getHours()).padStart(2, '0') + 
-            String(now.getMinutes()).padStart(2, '0') + 
-            String(now.getSeconds()).padStart(2, '0');
+        const orderId = String(now.getHours()).padStart(2, '0') + 
+                    String(now.getMinutes()).padStart(2, '0') + "-" +
+                    String(now.getSeconds()).padStart(2, '0');
 
         saveBtn.disabled = true;
         saveBtn.innerText = "전송 중...";
